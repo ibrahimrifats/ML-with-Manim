@@ -5,7 +5,7 @@
 ## 1. Run Manim Script
 In the terminal, execute:
 ```bash
-manim -pqh add.py
+manim -pqh MLP.py
 ```
 
 When prompted to select options, choose all by entering them separated with commas:

@@ -1,47 +1,57 @@
 #!/bin/bash
 
-
 # Configuration
-INPUT_DIR="media/videos/cnn_visualization/1080p60/partial_movie_files/CNNExplained"
-OUTPUT_DIR="final_video"
-OUTPUT_FILE="cnn_visualization_complete.mp4"
-LOG_FILE="combine.log"
+SCENES=("MLPTitle" "NeuronImageScene" "MLPAnimation" "FinalSummary")
+OUTPUT_DIR="rendered_scenes"
+FINAL_OUTPUT="mlp_deep_dive_final.mp4"
 
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
 
-# Create temporary file list
-LIST_FILE="$OUTPUT_DIR/filelist.txt"
-> "$LIST_FILE"
+# Render each scene
+echo "Starting video rendering..."
+for i in "${!SCENES[@]}"; do
+    scene="${SCENES[$i]}"
+    output_file="$OUTPUT_DIR/temp_part_$((i+1)).mp4"
+    temp_name="temp_part_$((i+1))"
 
-echo "=== Video Combination Process Started ===" | tee "$LOG_FILE"
-echo "Scanning for partial video files..." | tee -a "$LOG_FILE"
+    echo "Rendering $scene..."
 
-# Find and sort files by their sequence numbers
-find "$INPUT_DIR" -name "*.mp4" -type f | sort -t '_' -n -k1 | while read -r file; do
-    if [[ -f "$file" ]]; then
-        echo "file '$PWD/$file'" >> "$LIST_FILE"
-        echo "Added: $file" | tee -a "$LOG_FILE"
+    # Render the scene and specify output filename
+    manim -ql -o "$temp_name" ad.py "$scene"
+
+    # Move the rendered file to the output directory
+    rendered_path="media/videos/ad/1920p30/${temp_name}.mp4"
+    if [ -f "$rendered_path" ]; then
+        mv "$rendered_path" "$output_file"
     else
-        echo "Warning: File not found - $file" | tee -a "$LOG_FILE"
+        echo "Error: Failed to render $scene"
+        exit 1
     fi
 done
 
-echo "Found $(wc -l < "$LIST_FILE") video chunks to combine" | tee -a "$LOG_FILE"
+# Combine videos
+echo "Combining videos..."
+(
+    cd "$OUTPUT_DIR" || exit 1
+    echo "Creating file list..."
+    > input.txt
+    for f in temp_part_*.mp4; do
+        echo "file '$f'" >> input.txt
+    done
 
-# Combine videos using ffmpeg
-echo "Combining videos..." | tee -a "$LOG_FILE"
-ffmpeg -f concat -safe 0 -i "$LIST_FILE" -c copy "$OUTPUT_DIR/$OUTPUT_FILE" 2>&1 | tee -a "$LOG_FILE"
+    ffmpeg -f concat -safe 0 -i input.txt -c copy "$FINAL_OUTPUT"
+    mv "$FINAL_OUTPUT" ..
+)
 
-# Verify output
-if [[ -f "$OUTPUT_DIR/$OUTPUT_FILE" ]]; then
-    echo "Successfully created: $OUTPUT_DIR/$OUTPUT_FILE" | tee -a "$LOG_FILE"
-    echo "File size: $(du -h "$OUTPUT_DIR/$OUTPUT_FILE" | cut -f1)" | tee -a "$LOG_FILE"
-    # Clean up
-    rm "$LIST_FILE"
-else
-    echo "Error: Failed to create output video" | tee -a "$LOG_FILE"
-    echo "Temporary file list kept at: $LIST_FILE for debugging" | tee -a "$LOG_FILE"
+# Verify final output
+if [ ! -f "$FINAL_OUTPUT" ]; then
+    echo "Error: Failed to create final video"
+    exit 1
 fi
 
-echo "=== Process Complete ===" | tee -a "$LOG_FILE"
+# Cleanup
+echo "Cleaning up..."
+rm -rf "$OUTPUT_DIR"
+
+echo "✅ Success! Final video created: $FINAL_OUTPUT"
